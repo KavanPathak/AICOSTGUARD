@@ -1,0 +1,86 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  apps      App[]
+
+  @@map("users")
+}
+
+model App {
+  id                   String       @id @default(uuid())
+  name                 String
+  description          String?
+  dailyCostLimit       Float        @default(10.0) @map("daily_cost_limit") // in USD
+  latencyThreshold     Int          @default(5000) @map("latency_threshold") // in ms
+  errorRateThreshold   Float        @default(0.10) @map("error_rate_threshold") // fraction (e.g. 10% = 0.10)
+  userId               String       @map("user_id")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  
+  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeys              ApiKey[]
+  requestLogs          RequestLog[]
+  alerts               Alert[]
+
+  @@map("apps")
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  appId     String   @map("app_id")
+  keyHash   String   @unique @map("key_hash")
+  keyPrefix String   @map("key_prefix")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model RequestLog {
+  id               String   @id @default(uuid())
+  appId            String   @map("app_id")
+  model            String
+  provider         String   @default("openai")
+  promptTokens     Int      @map("prompt_tokens")
+  completionTokens Int      @map("completion_tokens")
+  totalTokens      Int      @map("total_tokens")
+  estimatedCost    Float    @map("estimated_cost") // USD
+  latencyMs        Int      @map("latency_ms")
+  status           Int      // HTTP status or custom status code (e.g., 200, 400, 500)
+  errorMessage     String?  @map("error_message")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  app              App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@index([createdAt])
+  @@map("request_logs")
+}
+
+model Alert {
+  id             String   @id @default(uuid())
+  appId          String   @map("app_id")
+  type           String   // e.g., "cost_limit", "latency_threshold", "error_rate"
+  thresholdValue Float    @map("threshold_value")
+  actualValue    Float    @map("actual_value")
+  message        String
+  isResolved     Boolean  @default(false) @map("is_resolved")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  app            App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
